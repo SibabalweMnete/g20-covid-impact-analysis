@@ -1,0 +1,50 @@
+name: Weekly Data Update
+
+on:
+  schedule:
+    # Run every Monday at 00:00 UTC
+    - cron: '0 0 * * 1'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+
+    - name: Run data collection
+      run: |
+        python src/data_collection.py
+        python src/data_cleaning.py
+
+    - name: Check for changes
+      id: verify-changed-files
+      run: |
+        git diff --quiet data/ || echo "changed=true" >> $GITHUB_OUTPUT
+
+    - name: Commit updated data
+      if: steps.verify-changed-files.outputs.changed == 'true'
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add data/
+        git commit -m "chore: automated data update [skip ci]"
+        git push
+
+    - name: Create update report
+      if: steps.verify-changed-files.outputs.changed == 'true'
+      run: |
+        echo "Data updated successfully on $(date)" >> update_log.txt
